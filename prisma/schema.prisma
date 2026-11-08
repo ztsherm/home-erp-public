@@ -1,0 +1,848 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMINISTRATOR
+  MEMBER
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  INACTIVE
+}
+
+enum ItemStatus {
+  ACTIVE
+  MISSING
+  NEEDS_MAINTENANCE
+  ARCHIVED
+}
+
+enum TransactionType {
+  ITEM_PUTAWAY
+  ITEM_TRANSFER
+  ITEM_CONSUMPTION
+  ITEM_MAINTENANCE
+  ITEM_LOAN
+}
+
+enum ActivityAction {
+  CREATE
+  UPDATE
+  DELETE
+  TRANSACTION
+}
+
+enum TaskStatus {
+  OPEN
+  COMPLETED
+  SKIPPED
+}
+
+enum RecordFieldKind {
+  FREE_TEXT
+  DATE
+  INTEGER
+  CHECKBOX
+  LIST
+  RECORD
+}
+
+enum ListSelectionMode {
+  SINGLE
+  MULTI
+}
+
+enum ReportVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum ReportFilterOperator {
+  CONTAINS
+  STARTS_WITH
+  ENDS_WITH
+  EQUALS
+  NOT_EQUALS
+  GREATER_THAN
+  LESS_THAN
+  ON_OR_AFTER
+  ON_OR_BEFORE
+  LAST_7_DAYS
+  LAST_30_DAYS
+  IS_EMPTY
+  IS_NOT_EMPTY
+}
+
+enum ReportFilterRole {
+  CRITERIA
+  FILTER
+}
+
+enum WorkflowScript {
+  GENERATE_SCHEDULED_ITEM_TASKS
+}
+
+enum WorkflowCadence {
+  MANUAL
+  HOURLY
+  DAILY
+  WEEKLY
+}
+
+enum WorkflowRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model Household {
+  id                String             @id @default(cuid())
+  name              String
+  slug              String             @unique
+  timezone          String             @default("America/Chicago")
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  users             User[]
+  locations         Location[]
+  rooms             Room[]
+  areas             Area[]
+  items             Item[]
+  multiUpcs         ItemMultiUpc[]
+  itemLocations     ItemLocation[]
+  putaways          ItemPutaway[]
+  transfers         ItemTransfer[]
+  consumptions      ItemConsumption[]
+  maintenanceLogs   ItemMaintenance[]
+  loans             ItemLoan[]
+  fileRecords       FileRecord[]
+  people            People[]
+  activityLogs      ActivityLog[]
+  recordTypes       RecordType[]
+  recordFields      RecordField[]
+  lists             AppList[]
+  listOptions       AppListOption[]
+  reports           Report[]
+  reportColumns     ReportColumn[]
+  reportFilters     ReportFilter[]
+  tasks             Task[]
+  taskSchedules     TaskSchedule[]
+  itemTaskSchedules ItemTaskSchedule[]
+  workflows         Workflow[]
+  workflowRuns      WorkflowRun[]
+  favorites         Favorite[]
+  recentRecords     RecentRecord[]
+}
+
+model User {
+  id            String         @id @default(cuid())
+  householdId   String
+  peopleId      String?        @unique
+  name          String
+  email         String         @unique
+  passwordHash  String
+  role          Role           @default(MEMBER)
+  status        UserStatus     @default(ACTIVE)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  household     Household      @relation(fields: [householdId], references: [id])
+  people        People?        @relation(fields: [peopleId], references: [id])
+  accounts      Account[]
+  sessions      Session[]
+  reports       Report[]
+  favorites     Favorite[]
+  recentRecords RecentRecord[]
+
+  @@index([householdId])
+  @@index([householdId, status])
+}
+
+model Favorite {
+  id          String    @id @default(cuid())
+  householdId String
+  userId      String
+  href        String
+  label       String
+  createdAt   DateTime  @default(now())
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, href])
+  @@index([householdId, userId, createdAt])
+}
+
+model RecentRecord {
+  id          String    @id @default(cuid())
+  householdId String
+  userId      String
+  href        String
+  label       String
+  viewedAt    DateTime  @default(now())
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, href])
+  @@index([householdId, userId, viewedAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Location {
+  id            String         @id @default(cuid())
+  householdId   String
+  name          String
+  notes         String?
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  household     Household      @relation(fields: [householdId], references: [id])
+  rooms         Room[]
+  areas         Area[]
+  itemLocations ItemLocation[]
+
+  @@unique([householdId, name])
+  @@index([householdId])
+  @@index([householdId, active])
+}
+
+model Room {
+  id            String         @id @default(cuid())
+  householdId   String
+  locationId    String
+  name          String
+  notes         String?
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  household     Household      @relation(fields: [householdId], references: [id])
+  location      Location       @relation(fields: [locationId], references: [id])
+  areas         Area[]
+  itemLocations ItemLocation[]
+
+  @@unique([householdId, locationId, name])
+  @@index([householdId])
+  @@index([householdId, locationId])
+  @@index([householdId, active])
+}
+
+model Area {
+  id            String         @id @default(cuid())
+  householdId   String
+  locationId    String
+  roomId        String
+  name          String
+  notes         String?
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  household     Household      @relation(fields: [householdId], references: [id])
+  location      Location       @relation(fields: [locationId], references: [id])
+  room          Room           @relation(fields: [roomId], references: [id])
+  itemLocations ItemLocation[]
+
+  @@unique([householdId, roomId, name])
+  @@index([householdId])
+  @@index([householdId, locationId])
+  @@index([householdId, roomId])
+  @@index([householdId, active])
+}
+
+model Item {
+  id              String             @id @default(cuid())
+  householdId     String
+  name            String
+  description     String?
+  brand           String?
+  model           String?
+  serialNumber    String?
+  upc             String?
+  minQuantity     Decimal?           @db.Decimal(12, 2)
+  targetQuantity  Decimal?           @db.Decimal(12, 2)
+  purchasePrice   Decimal?           @db.Decimal(12, 2)
+  purchaseDate    DateTime?
+  status          ItemStatus         @default(ACTIVE)
+  notes           String?
+  photoUrl        String?
+  active          Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  household       Household          @relation(fields: [householdId], references: [id])
+  itemLocations   ItemLocation[]
+  taskSchedules   ItemTaskSchedule[]
+  putaways        ItemPutaway[]
+  transfers       ItemTransfer[]
+  consumptions    ItemConsumption[]
+  maintenanceLogs ItemMaintenance[]
+  loans           ItemLoan[]
+  multiUpcs       ItemMultiUpc[]
+  generatedTasks  Task[]
+
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, status])
+  @@index([householdId, name])
+  @@index([householdId, serialNumber])
+  @@index([householdId, upc])
+  @@index([householdId, active, updatedAt])
+}
+
+model ItemMultiUpc {
+  id          String    @id @default(cuid())
+  householdId String
+  itemId      String
+  upc         String
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  household   Household @relation(fields: [householdId], references: [id])
+  item        Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, itemId, upc])
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, upc])
+  @@index([householdId, itemId])
+}
+
+model ItemLocation {
+  id            String            @id @default(cuid())
+  householdId   String
+  itemId        String
+  locationId    String
+  roomId        String
+  areaId        String
+  quantity      Decimal           @default(0) @db.Decimal(12, 2)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  household     Household         @relation(fields: [householdId], references: [id])
+  item          Item              @relation(fields: [itemId], references: [id])
+  location      Location          @relation(fields: [locationId], references: [id])
+  room          Room              @relation(fields: [roomId], references: [id])
+  area          Area              @relation(fields: [areaId], references: [id])
+  putaways      ItemPutaway[]
+  transfersFrom ItemTransfer[]    @relation("TransferFromItemLocation")
+  transfersTo   ItemTransfer[]    @relation("TransferToItemLocation")
+  consumptions  ItemConsumption[]
+
+  @@unique([householdId, itemId, areaId])
+  @@index([householdId])
+  @@index([householdId, itemId])
+  @@index([householdId, itemId, updatedAt])
+  @@index([householdId, locationId])
+  @@index([householdId, roomId])
+  @@index([householdId, areaId])
+}
+
+model ItemPutaway {
+  id             String       @id @default(cuid())
+  householdId    String
+  transactionNo  Int          @default(autoincrement())
+  itemId         String
+  itemLocationId String
+  locationId     String
+  roomId         String
+  areaId         String
+  quantity       Decimal      @db.Decimal(12, 2)
+  performedById  String
+  notes          String?
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  household      Household    @relation(fields: [householdId], references: [id])
+  item           Item         @relation(fields: [itemId], references: [id])
+  itemLocation   ItemLocation @relation(fields: [itemLocationId], references: [id])
+  performedBy    People       @relation(fields: [performedById], references: [id])
+
+  @@unique([householdId, transactionNo])
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, itemId])
+  @@index([householdId, itemId, createdAt])
+  @@index([householdId, itemLocationId])
+  @@index([householdId, createdAt])
+}
+
+model ItemTransfer {
+  id                 String       @id @default(cuid())
+  householdId        String
+  transactionNo      Int          @default(autoincrement())
+  itemId             String
+  fromItemLocationId String
+  toItemLocationId   String
+  quantity           Decimal      @db.Decimal(12, 2)
+  performedById      String
+  notes              String?
+  active             Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  household          Household    @relation(fields: [householdId], references: [id])
+  item               Item         @relation(fields: [itemId], references: [id])
+  fromItemLocation   ItemLocation @relation("TransferFromItemLocation", fields: [fromItemLocationId], references: [id])
+  toItemLocation     ItemLocation @relation("TransferToItemLocation", fields: [toItemLocationId], references: [id])
+  performedBy        People       @relation(fields: [performedById], references: [id])
+
+  @@unique([householdId, transactionNo])
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, itemId])
+  @@index([householdId, itemId, createdAt])
+  @@index([householdId, createdAt])
+}
+
+model ItemConsumption {
+  id             String       @id @default(cuid())
+  householdId    String
+  transactionNo  Int          @default(autoincrement())
+  itemId         String
+  itemLocationId String
+  locationId     String
+  roomId         String
+  areaId         String
+  quantity       Decimal      @db.Decimal(12, 2)
+  performedById  String
+  notes          String?
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  household      Household    @relation(fields: [householdId], references: [id])
+  item           Item         @relation(fields: [itemId], references: [id])
+  itemLocation   ItemLocation @relation(fields: [itemLocationId], references: [id])
+  performedBy    People       @relation(fields: [performedById], references: [id])
+
+  @@unique([householdId, transactionNo])
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, itemId])
+  @@index([householdId, itemId, createdAt])
+  @@index([householdId, itemLocationId])
+  @@index([householdId, createdAt])
+}
+
+model ItemMaintenance {
+  id              String    @id @default(cuid())
+  householdId     String
+  transactionNo   Int       @default(autoincrement())
+  itemId          String
+  maintenanceType String
+  performedById   String
+  vendor          String?
+  cost            Decimal?  @db.Decimal(12, 2)
+  notes           String?
+  nextDueDate     DateTime?
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  household       Household @relation(fields: [householdId], references: [id])
+  item            Item      @relation(fields: [itemId], references: [id])
+  performedBy     People    @relation(fields: [performedById], references: [id])
+  completedTask   Task?
+
+  @@unique([householdId, transactionNo])
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, itemId])
+  @@index([householdId, itemId, createdAt])
+  @@index([householdId, createdAt])
+}
+
+model ItemLoan {
+  id                 String       @id @default(cuid())
+  householdId        String
+  transactionNo      Int          @default(autoincrement())
+  itemId             String
+  borrowerId         String
+  loanDate           DateTime     @default(now())
+  expectedReturnDate DateTime?
+  actualReturnDate   DateTime?
+  conditionNotes     String?
+  notes              String?
+  active             Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  household          Household    @relation(fields: [householdId], references: [id])
+  item               Item         @relation(fields: [itemId], references: [id])
+  borrower           People       @relation("ItemLoanBorrower", fields: [borrowerId], references: [id])
+
+  @@unique([householdId, transactionNo])
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, itemId])
+  @@index([householdId, borrowerId])
+  @@index([householdId, actualReturnDate])
+  @@index([householdId, createdAt])
+}
+
+model FileRecord {
+  id                  String     @id @default(cuid())
+  householdId         String
+  name                String
+  fileUrl             String
+  fileName            String
+  mimeType            String
+  sizeBytes           Int
+  relatedRecordTypeId String
+  relatedRecordId     String
+  notes               String?
+  active              Boolean    @default(true)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  household           Household  @relation(fields: [householdId], references: [id])
+  relatedRecordType   RecordType @relation(fields: [relatedRecordTypeId], references: [id])
+
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, relatedRecordTypeId, relatedRecordId])
+  @@index([householdId, name])
+}
+
+model People {
+  id                       String             @id @default(cuid())
+  householdId              String
+  name                     String
+  relationshipTypeOptionId String?
+  email                    String?
+  phone                    String?
+  profilePhotoUrl          String?
+  friendOfPeopleIds        String[]           @default([])
+  birthday                 DateTime?
+  anniversary              DateTime?
+  employer                 String?
+  jobTitle                 String?
+  interestOptionIds        String[]           @default([])
+  notes                    String?
+  pin                      String?
+  active                   Boolean            @default(true)
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  household                Household          @relation(fields: [householdId], references: [id])
+  user                     User?
+  putaways                 ItemPutaway[]
+  transfers                ItemTransfer[]
+  consumptions             ItemConsumption[]
+  maintenanceLogs          ItemMaintenance[]
+  loans                    ItemLoan[]         @relation("ItemLoanBorrower")
+  assignedTasks            Task[]             @relation("TaskAssignedTo")
+  completedTasks           Task[]             @relation("TaskCompletedBy")
+  taskSchedulesAssigned    TaskSchedule[]     @relation("TaskScheduleAssignedTo")
+  itemTaskSchedules        ItemTaskSchedule[] @relation("ItemTaskScheduleAssignedBy")
+  activityLogs             ActivityLog[]
+
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, name])
+}
+
+model TaskSchedule {
+  id            String             @id @default(cuid())
+  householdId   String
+  title         String
+  intervalDays  Int
+  assignedToId  String?
+  active        Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  household     Household          @relation(fields: [householdId], references: [id])
+  assignedTo    People?            @relation("TaskScheduleAssignedTo", fields: [assignedToId], references: [id])
+  itemSchedules ItemTaskSchedule[]
+  tasks         Task[]
+
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, assignedToId])
+}
+
+model ItemTaskSchedule {
+  id             String       @id @default(cuid())
+  householdId    String
+  itemId         String
+  taskScheduleId String
+  assignedById   String?
+  createdAt      DateTime     @default(now())
+  household      Household    @relation(fields: [householdId], references: [id])
+  item           Item         @relation(fields: [itemId], references: [id])
+  taskSchedule   TaskSchedule @relation(fields: [taskScheduleId], references: [id])
+  assignedBy     People?      @relation("ItemTaskScheduleAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([householdId, itemId, taskScheduleId])
+  @@index([householdId])
+  @@index([householdId, itemId])
+  @@index([householdId, taskScheduleId])
+}
+
+model Task {
+  id                  String           @id @default(cuid())
+  householdId         String
+  itemId              String
+  taskScheduleId      String?
+  assignedToId        String?
+  completedById       String?
+  maintenanceRecordId String?          @unique
+  title               String
+  dueDate             DateTime
+  status              TaskStatus       @default(OPEN)
+  notes               String?
+  nextTaskDate        DateTime?
+  completedDate       DateTime?
+  completedAt         DateTime?
+  skippedAt           DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  household           Household        @relation(fields: [householdId], references: [id])
+  item                Item             @relation(fields: [itemId], references: [id])
+  taskSchedule        TaskSchedule?    @relation(fields: [taskScheduleId], references: [id])
+  assignedTo          People?          @relation("TaskAssignedTo", fields: [assignedToId], references: [id])
+  completedBy         People?          @relation("TaskCompletedBy", fields: [completedById], references: [id])
+  maintenanceRecord   ItemMaintenance? @relation(fields: [maintenanceRecordId], references: [id])
+
+  @@index([householdId])
+  @@index([householdId, itemId, dueDate])
+  @@index([householdId, status])
+  @@index([householdId, status, assignedToId, dueDate])
+  @@index([householdId, dueDate])
+  @@index([householdId, nextTaskDate])
+  @@index([householdId, taskScheduleId])
+  @@index([householdId, assignedToId])
+  @@index([householdId, completedById])
+}
+
+model ActivityLog {
+  id          String         @id @default(cuid())
+  householdId String
+  peopleId    String?
+  action      ActivityAction
+  recordType  String
+  recordId    String
+  summary     String
+  createdAt   DateTime       @default(now())
+  household   Household      @relation(fields: [householdId], references: [id])
+  people      People?        @relation(fields: [peopleId], references: [id])
+
+  @@index([householdId])
+  @@index([householdId, recordType])
+  @@index([householdId, recordType, recordId, createdAt])
+  @@index([householdId, action])
+  @@index([householdId, createdAt])
+}
+
+model Workflow {
+  id          String             @id @default(cuid())
+  householdId String
+  name        String
+  script      WorkflowScript
+  cadence     WorkflowCadence    @default(MANUAL)
+  active      Boolean            @default(true)
+  nextRunAt   DateTime?
+  lastRunAt   DateTime?
+  lastStatus  WorkflowRunStatus?
+  lastSummary String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  household   Household          @relation(fields: [householdId], references: [id])
+  runs        WorkflowRun[]
+
+  @@index([householdId])
+  @@index([householdId, active])
+  @@index([householdId, script])
+  @@index([active, nextRunAt])
+}
+
+model WorkflowRun {
+  id          String            @id @default(cuid())
+  householdId String
+  workflowId  String
+  status      WorkflowRunStatus @default(RUNNING)
+  startedAt   DateTime          @default(now())
+  finishedAt  DateTime?
+  summary     String?
+  error       String?
+  household   Household         @relation(fields: [householdId], references: [id])
+  workflow    Workflow          @relation(fields: [workflowId], references: [id])
+
+  @@index([householdId])
+  @@index([workflowId])
+  @@index([householdId, startedAt])
+}
+
+model RecordType {
+  id              String        @id @default(cuid())
+  householdId     String
+  name            String
+  key             String
+  icon            String?
+  description     String?
+  systemType      Boolean       @default(false)
+  editableRecords Boolean       @default(true)
+  active          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  household       Household     @relation(fields: [householdId], references: [id])
+  fields          RecordField[] @relation("RecordTypeFields")
+  recordFields    RecordField[] @relation("RecordReferenceTarget")
+  fileRecords     FileRecord[]
+
+  @@unique([householdId, key])
+  @@index([householdId])
+  @@index([householdId, active])
+}
+
+model RecordField {
+  id                  String          @id @default(cuid())
+  householdId         String
+  recordTypeId        String
+  label               String
+  key                 String
+  kind                RecordFieldKind
+  required            Boolean         @default(false)
+  position            Int             @default(0)
+  listId              String?
+  relatedRecordTypeId String?
+  active              Boolean         @default(true)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  household           Household       @relation(fields: [householdId], references: [id])
+  recordType          RecordType      @relation("RecordTypeFields", fields: [recordTypeId], references: [id])
+  list                AppList?        @relation(fields: [listId], references: [id])
+  relatedRecordType   RecordType?     @relation("RecordReferenceTarget", fields: [relatedRecordTypeId], references: [id])
+
+  @@unique([recordTypeId, key])
+  @@index([householdId])
+  @@index([householdId, recordTypeId])
+  @@index([householdId, active])
+}
+
+model AppList {
+  id               String            @id @default(cuid())
+  householdId      String
+  name             String
+  key              String
+  selectionMode    ListSelectionMode @default(SINGLE)
+  allowAddOnRecord Boolean           @default(true)
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  household        Household         @relation(fields: [householdId], references: [id])
+  options          AppListOption[]
+  fields           RecordField[]
+
+  @@unique([householdId, key])
+  @@index([householdId])
+  @@index([householdId, active])
+}
+
+model AppListOption {
+  id          String    @id @default(cuid())
+  householdId String
+  listId      String
+  label       String
+  value       String
+  position    Int       @default(0)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  household   Household @relation(fields: [householdId], references: [id])
+  list        AppList   @relation(fields: [listId], references: [id])
+
+  @@unique([listId, value])
+  @@index([householdId])
+  @@index([householdId, listId])
+  @@index([householdId, active])
+}
+
+model Report {
+  id          String           @id @default(cuid())
+  householdId String
+  ownerUserId String
+  name        String
+  baseTable   String
+  visibility  ReportVisibility @default(PRIVATE)
+  active      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  household   Household        @relation(fields: [householdId], references: [id])
+  owner       User             @relation(fields: [ownerUserId], references: [id])
+  columns     ReportColumn[]
+  filters     ReportFilter[]
+
+  @@index([householdId])
+  @@index([householdId, active, name])
+  @@index([householdId, active])
+  @@index([householdId, visibility])
+  @@index([ownerUserId])
+}
+
+model ReportColumn {
+  id          String    @id @default(cuid())
+  householdId String
+  reportId    String
+  columnKey   String
+  label       String
+  position    Int       @default(0)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  household   Household @relation(fields: [householdId], references: [id])
+  report      Report    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, columnKey])
+  @@index([householdId])
+  @@index([householdId, reportId])
+  @@index([householdId, active])
+}
+
+model ReportFilter {
+  id          String               @id @default(cuid())
+  householdId String
+  reportId    String
+  columnKey   String
+  operator    ReportFilterOperator @default(CONTAINS)
+  value       String
+  role        ReportFilterRole     @default(CRITERIA)
+  active      Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  household   Household            @relation(fields: [householdId], references: [id])
+  report      Report               @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+  @@index([householdId, reportId])
+  @@index([householdId, active])
+}
